@@ -59,7 +59,7 @@
       button.textContent = 'Создаём аккаунт…';
 
       try {
-        const redirectTo = new URL('index.html', window.location.href).href;
+        const redirectTo = new URL('auth-callback.html', window.location.href).href;
         const { data, error } = await window.citySupabase.auth.signUp({
           email,
           password,

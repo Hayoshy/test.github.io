@@ -1,18 +1,20 @@
-НАСТРОЙКА ПОДТВЕРЖДЕНИЯ ПОЧТЫ
+НАСТРОЙКА EMAIL CONFIRMATION В SUPABASE
 
-1. Supabase Dashboard → Authentication → Providers → Email.
-2. Убедитесь, что Email provider включён.
-3. Включите Confirm email / Email confirmations.
-4. Authentication → URL Configuration:
-   - Site URL: адрес опубликованного сайта.
-   - Redirect URLs: добавьте точный адрес сайта и адрес index.html.
-5. Сохраните изменения.
+1. Supabase Dashboard → Authentication → URL Configuration.
+2. Site URL установите в адрес опубликованного сайта, например:
+   https://kartaproblemgoroda.github.io
+   (если фактический адрес сайта отличается, используйте фактический).
+3. В Redirect URLs добавьте:
+   https://kartaproblemgoroda.github.io/auth-callback.html
+   и, если используете локальный сервер для тестирования:
+   http://localhost:5500/auth-callback.html
+4. Authentication → Providers → Email: включите Confirm email.
+5. Для надёжной отправки писем настройте SMTP в Authentication → SMTP Settings.
 
-При регистрации сайт отправляет письмо на указанный пользователем адрес.
-Пользователь должен открыть письмо и нажать ссылку подтверждения.
-После подтверждения он возвращается на index.html и входит с почтой и паролем.
+После регистрации письмо ведёт на auth-callback.html. Эта страница обменивает
+код подтверждения на сессию и перенаправляет пользователя на index.html.
 
-ВАЖНО:
-- Для отправки писем в рабочем проекте настройте SMTP в Supabase Auth → SMTP Settings.
-- Не отключайте подтверждение email, если хотите требовать подтверждённую почту.
-- Не публикуйте Secret API Key или service_role key.
+Если сайт размещён не в корне kartaproblemgoroda.github.io, замените URL выше
+на фактический URL публикации. Старое письмо, отправленное до исправления,
+может вести на прежний адрес: зарегистрируйте тестовый адрес заново или
+запросите новое письмо подтверждения.
