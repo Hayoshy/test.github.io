@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Карта проблем города</title>
+  <link rel="icon" type="image/png" sizes="180x180" href="img/mini_logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap&subset=cyrillic">
+  <link rel="stylesheet" href="css/home.css">
+</head>
+<body>
+  <div id="map" aria-label="Карта города"></div>
+
+  <!-- ===== Шапка ===== -->
+  <header class="top">
+    <a class="brand" href="index.html" aria-label="Карта проблем города — на главную">
+      <img src="img/logo.png" alt="">
+    </a>
+
+    <form class="search" id="search" role="search" autocomplete="off">
+      <div class="search__row">
+        <input class="search__input" id="search-input" type="text" placeholder="Поиск" aria-label="Поиск по району, улице или категории" aria-controls="suggest" enterkeyhint="search">
+        <button class="search__clear" id="search-clear" type="button" aria-label="Очистить поиск" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <svg class="search__icon" id="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+      </div>
+      <ul class="suggest" id="suggest" hidden></ul>
+    </form>
+
+    <nav class="nav" aria-label="Разделы">
+      <button type="button" id="nav-filter" data-panel="filter" aria-expanded="false" aria-controls="panel-filter">Фильтр</button>
+      <button type="button" id="nav-events" data-panel="events" aria-expanded="false" aria-controls="panel-events">События</button>
+      <a id="nav-account" href="login.html">Аккаунт</a>
+    </nav>
+  </header>
+
+  <!-- ===== Масштаб ===== -->
+  <div class="zoom" role="group" aria-label="Масштаб карты">
+    <button class="round" id="zoom-in" type="button" aria-label="Приблизить">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <input class="zoom__range" id="zoom-range" type="range" min="9" max="19" step="0.1" value="11" aria-label="Масштаб">
+    <button class="round" id="zoom-out" type="button" aria-label="Отдалить">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+    </button>
+  </div>
+
+  <!-- ===== Где я / AI-агент ===== -->
+  <div class="fabs">
+    <div class="fab">
+      <span class="fab__label">Где я?</span>
+      <button class="round" id="locate" type="button" aria-label="Где я?">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-6.2-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>
+      </button>
+    </div>
+    <div class="fab">
+      <span class="fab__label">AI Агент</span>
+      <button class="round" id="agent" type="button" aria-label="AI Агент">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.7 7L4 20l1.1-4A8 8 0 1 1 20 12z"/><path d="M9 11h.01M12 11h.01M15 11h.01" stroke-width="2.6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== Фильтр ===== -->
+  <section class="panel" id="panel-filter" role="dialog" aria-labelledby="filter-title" hidden>
+    <div class="panel__head">
+      <h2 id="filter-title">Параметры фильтрации</h2>
+      <button class="round round--sm" type="button" data-close aria-label="Закрыть фильтр">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="fgrid">
+      <fieldset class="fcard">
+        <legend>Категория</legend>
+        <div class="flist" id="f-cats"></div>
+      </fieldset>
+      <fieldset class="fcard">
+        <legend>Дата</legend>
+        <div class="flist" id="f-period"></div>
+      </fieldset>
+      <fieldset class="fcard">
+        <legend>Район</legend>
+        <div class="flist" id="f-districts"></div>
+      </fieldset>
+      <fieldset class="fcard">
+        <legend>Статус</legend>
+        <div class="flist flist--plain" id="f-status"></div>
+      </fieldset>
+    </div>
+    <div class="panel__foot">
+      <span class="panel__count" id="filter-count" aria-live="polite"></span>
+      <button class="link-btn" id="filter-reset" type="button">Сбросить фильтры</button>
+    </div>
+  </section>
+
+  <!-- ===== Лента событий ===== -->
+  <section class="panel" id="panel-events" role="dialog" aria-labelledby="events-title" hidden>
+    <div class="panel__head">
+      <h2 id="events-title">Лента событий</h2>
+      <button class="round round--sm" type="button" data-close aria-label="Закрыть ленту событий">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="events" id="events-list"></div>
+  </section>
+
+  <!-- ===== Карточка метки на карте ===== -->
+  <aside class="detail" id="detail" aria-label="Выбранное событие" hidden>
+    <button class="round round--sm detail__close" id="detail-close" type="button" aria-label="Закрыть карточку">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div id="detail-body"></div>
+  </aside>
+
+  <!-- ===== Форма новой метки ===== -->
+  <section class="make" id="make" role="dialog" aria-labelledby="make-title" hidden>
+    <form id="make-form" novalidate>
+      <div class="make__head">
+        <h2 id="make-title">Отметить проблему</h2>
+        <button class="round round--sm" id="make-close" type="button" aria-label="Отменить">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <p class="make__addr" id="make-addr" aria-live="polite">Определяем адрес…</p>
+
+      <div class="make__grid">
+        <fieldset class="fcard">
+          <legend>Выберите категорию</legend>
+          <div class="flist" id="make-cats"></div>
+        </fieldset>
+
+        <fieldset class="fcard">
+          <legend>Проводятся работы?</legend>
+          <div class="flist flist--plain">
+            <label class="check"><input type="radio" name="works" value="yes"><span class="box box--round"></span><span>Да</span></label>
+            <label class="check"><input type="radio" name="works" value="no"><span class="box box--round"></span><span>Нет</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="fcard">
+          <legend>Медиаматериал</legend>
+          <button class="upload" id="upload-btn" type="button" aria-label="Добавить фото или видео">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>
+          </button>
+          <input id="upload-input" type="file" accept="image/*,video/*" multiple hidden>
+          <ul class="files" id="files"></ul>
+        </fieldset>
+
+        <fieldset class="fcard">
+          <legend>Комментарии</legend>
+          <textarea class="comment" id="make-comment" maxlength="1000" rows="3" placeholder="Что случилось?" aria-label="Комментарий"></textarea>
+        </fieldset>
+      </div>
+
+      <label class="make__district" id="make-district-wrap" hidden>
+        <span>Район не определился — выберите вручную</span>
+        <select id="make-district"><option value="">Не указывать</option></select>
+      </label>
+
+      <p class="make__error" id="make-error" role="alert" hidden></p>
+      <div class="make__actions">
+        <button class="btn btn--ghost" id="make-cancel" type="button">Отмена</button>
+        <button class="btn" id="make-submit" type="submit">Отметить</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===== Просмотр медиа ===== -->
+  <dialog class="media" id="media">
+    <div class="media__bar">
+      <h2 id="media-title">Медиаматериалы</h2>
+      <button class="round round--sm" id="media-close" type="button" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="media__grid" id="media-grid"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
+  <script src="https://mapgl.2gis.com/api/js/v1"></script>
+  <script src="script.js"></script>
+</body>
+</html>

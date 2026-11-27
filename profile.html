@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>КАРТОЧКА ПОЛЬЗОВАТЕЛЯ</title>
+  <link rel="stylesheet" href="css/profile.css">
+  <link rel="icon" type="image/png" sizes="180x180" href="img/mini_logo.png">
+</head>
+<body>
+  <div class="screen">
+    <header class="topbar">
+      <button class="icon-btn" id="back" type="button" aria-label="На главную">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg>
+      </button>
+
+      <h1>карточка пользователя</h1>
+
+      <div class="menu">
+        <button class="icon-btn" id="menu-btn" type="button" aria-label="Действия" aria-haspopup="true" aria-expanded="false" aria-controls="menu-list">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+        </button>
+        <ul class="menu__list" id="menu-list" hidden>
+          <li><a class="menu__item" href="index.html">Открыть карту</a></li>
+          <li><button class="menu__item menu__item--danger" type="button" id="logout">Выйти из аккаунта</button></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="profile" aria-label="Пользователь">
+        <div class="avatar" id="avatar" aria-hidden="true"></div>
+        <div>
+          <h2 class="nickname" id="nickname">Загрузка…</h2>
+          <p class="profile__meta" id="meta"></p>
+        </div>
+      </section>
+
+      <h3 class="section-title">проблемы, отмеченные пользователем:</h3>
+
+      <div class="chips" id="chips" role="group" aria-label="Фильтр по категории"></div>
+
+      <ul class="cards" id="cards"></ul>
+      <p class="form-error" id="load-error" hidden></p>
+    </main>
+  </div>
+
+  <dialog class="media" id="media">
+    <div class="media__bar">
+      <h3 id="media-title">Медиа</h3>
+      <button class="icon-btn" type="button" id="media-close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="media__grid" id="media-grid"></div>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
+  <script src="https://mapgl.2gis.com/api/js/v1"></script>
+  <script>
+    (() => {
+      const sb = window.citySupabase;
+      const $ = (s) => document.querySelector(s);
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const fmt = (iso) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+      const plural = (n, f) => {
+        const m = n % 10, h = n % 100;
+        return f[h > 10 && h < 20 ? 2 : m === 1 ? 0 : m >= 2 && m <= 4 ? 1 : 2];
+      };
+      const STATUS = {
+        unsolved: { label: 'не решена', cls: 'status--unsolved' },
+        in_progress: { label: 'решается', cls: '' },
+        solved: { label: 'решена', cls: 'status--done' }
+      };
+
+      const STATUS_COLOR = { unsolved: '#e8553b', in_progress: '#f5b82e', solved: '#2fb464' };
+      const MAP_KEY = '714882ec-8dbf-4ff8-ac05-92e6b93317aa';
+      let problems = [];
+      let active = 'все';
+
+      /* Мини-карты: создаём, только когда карточка видна, и удаляем при уходе
+         с экрана — браузер ограничивает число одновременных карт. */
+      const thumbMaps = new WeakMap();
+      const thumbObserver = ('IntersectionObserver' in window && window.mapgl)
+        ? new IntersectionObserver((entries) => {
+            entries.forEach((en) => {
+              const a = en.target;
+              const box = a.querySelector('.map-thumb__map');
+              if (en.isIntersecting && !thumbMaps.has(a)) {
+                try {
+                  thumbMaps.set(a, new mapgl.Map(box, {
+                    key: MAP_KEY,
+                    center: [parseFloat(a.dataset.lng), parseFloat(a.dataset.lat)],
+                    zoom: 15.5,
+                    zoomControl: false
+                  }));
+                } catch (e) { console.warn('Мини-карта не создана:', e); }
+              } else if (!en.isIntersecting && thumbMaps.has(a)) {
+                thumbMaps.get(a).destroy();
+                thumbMaps.delete(a);
+                box.innerHTML = '';
+              }
+            });
+          }, { rootMargin: '120px' })
+        : null;
+      function watchThumbs() {
+        if (!thumbObserver) return;
+        document.querySelectorAll('.map-thumb').forEach((a) => thumbObserver.observe(a));
+      }
+
+      const avatar = $('#avatar');
+      function setAvatar(name, url) {
+        avatar.textContent = (name || '?').trim().charAt(0).toUpperCase();
+        if (url) avatar.innerHTML = '<img src="' + esc(url) + '" alt="">';
+      }
+
+      function renderMeta() {
+        const n = problems.length;
+        const solved = problems.filter(p => p.status === 'solved').length;
+        $('#meta').textContent = n + ' ' + plural(n, ['проблема', 'проблемы', 'проблем']) + ' на карте' +
+          (n ? ', решено: ' + solved : '');
+      }
+
+      function renderChips() {
+        const cats = ['все', ...new Set(problems.map(p => p.category_name))];
+        if (!cats.includes(active)) active = 'все';
+        $('#chips').innerHTML = cats.map(c =>
+          '<button class="chip" type="button" aria-pressed="' + (c === active) + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>'
+        ).join('');
+      }
+
+      function renderCards() {
+        const list = problems.filter(p => active === 'все' || p.category_name === active);
+        if (!list.length) {
+          $('#cards').innerHTML = '<li class="empty">' + (problems.length ? 'В этой категории проблем нет' : 'Пока нет отмеченных проблем. Нажмите на карту, чтобы отметить первую.') + '</li>';
+          return;
+        }
+        if (thumbObserver) thumbObserver.disconnect();
+        $('#cards').innerHTML = list.map(p => {
+          const st = STATUS[p.status] || STATUS.unsolved;
+          const has = Array.isArray(p.media) && p.media.length > 0;
+          const comment = p.comment ? esc(p.comment).replace(/\n/g, '<br>') : 'Без комментария';
+          return '<li class="card">' +
+            '<div>' +
+              '<div class="card__head"><h4 class="card__category">' + esc(p.category_name) + '</h4>' +
+              '<span class="status ' + st.cls + '">' + st.label + '</span></div>' +
+              '<p class="card__desc">' + comment + '</p>' +
+              '<p class="card__date">' + fmt(p.created_at) + (p.district ? ', ' + esc(p.district) : '') + '</p>' +
+              '<p class="card__votes">Решена: да — ' + p.yes_votes + ', нет — ' + p.no_votes + '</p>' +
+              '<button class="media-link" type="button" data-id="' + p.id + '"' + (has ? '' : ' disabled') + '>' +
+                (has ? 'посмотреть прикреплённые медиа' : 'медиа не прикреплены') + '</button>' +
+            '</div>' +
+            '<a class="map-thumb" href="index.html#problem-' + p.id + '" style="--pin:' + (STATUS_COLOR[p.status] || '#b3262b') + '" data-lat="' + p.lat + '" data-lng="' + p.lng + '" aria-label="Показать эту метку на карте">' +
+              '<div class="map-thumb__map"></div><span>на карте</span></a>' +
+          '</li>';
+        }).join('');
+        watchThumbs();
+      }
+
+      $('#chips').addEventListener('click', (e) => {
+        const b = e.target.closest('.chip'); if (!b) return;
+        active = b.dataset.cat; renderChips(); renderCards();
+      });
+
+      /* ===== Медиа ===== */
+      const dlg = $('#media');
+      $('#cards').addEventListener('click', (e) => {
+        const b = e.target.closest('.media-link'); if (!b || b.disabled) return;
+        const p = problems.find(x => x.id === +b.dataset.id);
+        if (!p) return;
+        $('#media-title').textContent = p.category_name;
+        $('#media-grid').innerHTML = p.media.map(m => m.type === 'video'
+          ? '<video src="' + esc(m.url) + '" controls preload="metadata"></video>'
+          : '<img src="' + esc(m.url) + '" alt="Прикреплённое фото" loading="lazy">').join('');
+        dlg.showModal();
+      });
+      $('#media-close').addEventListener('click', () => dlg.close());
+      dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+      dlg.addEventListener('close', () => { $('#media-grid').innerHTML = ''; });
+
+      /* ===== Меню и навигация ===== */
+      const menuBtn = $('#menu-btn'), menuList = $('#menu-list');
+      function toggleMenu(open) { menuList.hidden = !open; menuBtn.setAttribute('aria-expanded', open); }
+      menuBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleMenu(menuList.hidden); });
+      document.addEventListener('click', () => toggleMenu(false));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { toggleMenu(false); menuBtn.focus(); } });
+      $('#logout').addEventListener('click', async () => { await sb.auth.signOut(); location.href = 'index.html'; });
+      $('#back').addEventListener('click', () => { location.href = 'index.html'; });
+
+      /* ===== Старт ===== */
+      async function start() {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) { location.href = 'login.html'; return; }
+        const u = session.user;
+        let name = u.user_metadata?.username || u.user_metadata?.display_name || 'Пользователь';
+        let avatarUrl = u.user_metadata?.avatar_url || '';
+
+        const { data: profile } = await sb.from('profiles').select('username, avatar_url').eq('id', u.id).maybeSingle();
+        if (profile?.username) name = profile.username;
+        if (profile?.avatar_url) avatarUrl = profile.avatar_url;
+        $('#nickname').textContent = name;
+        setAvatar(name, avatarUrl);
+
+        const { data, error } = await sb.from('problems_feed').select('*').eq('user_id', u.id).order('created_at', { ascending: false });
+        if (error) {
+          const el = $('#load-error');
+          el.textContent = window.ruError(error, 'Не удалось загрузить проблемы.');
+          el.hidden = false;
+        } else {
+          problems = data || [];
+        }
+        renderMeta(); renderChips(); renderCards();
+      }
+
+      sb.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT' || !session) location.href = 'login.html';
+      });
+      start();
+    })();
+  </script>
+</body>
+</html>

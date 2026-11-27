@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>РЕГИСТРАЦИЯ</title>
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="icon" type="image/png" sizes="180x180" href="img/mini_logo.png">
+  <style>
+    .auth-message { margin: 12px 0; font-size: 14px; line-height: 1.5; }
+    .auth-message.error { color: #b42318; }
+    .auth-message.success { color: #18723b; }
+    .btn:disabled { opacity: .65; cursor: wait; }
+  </style>
+</head>
+<body>
+  <main class="auth">
+    <a class="logo-slot" href="index.html"><img src="img/logo.png" alt="На главную"></a>
+    <h1 class="auth__title">создайте аккаунт</h1>
+    <form class="form" id="register-form">
+      <input class="field" type="text" name="name" placeholder="имя пользователя" autocomplete="username" aria-label="Имя пользователя" minlength="2" maxlength="40" required>
+      <input class="field" type="email" name="email" placeholder="электронная почта" autocomplete="email" aria-label="Электронная почта" required>
+      <input class="field" type="password" name="password" placeholder="пароль (не менее 6 символов)" autocomplete="new-password" aria-label="Пароль" minlength="6" required>
+      <input class="field" type="password" name="password2" placeholder="повторите пароль" autocomplete="new-password" aria-label="Повторите пароль" required>
+      <button class="btn" id="register-button" type="submit">Зарегистрироваться</button>
+      <p class="auth-message" id="auth-message" role="status"></p>
+    </form>
+    <p class="auth__note">если у вас уже есть аккаунт, то <a href="login.html">войдите</a></p>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
+  <script>
+    const form = document.getElementById('register-form');
+    const message = document.getElementById('auth-message');
+    const button = document.getElementById('register-button');
+
+    function showMessage(text, type) {
+      message.textContent = text;
+      message.className = 'auth-message ' + type;
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      message.textContent = '';
+      message.className = 'auth-message';
+
+      const name = form.elements.name.value.trim();
+      const email = form.elements.email.value.trim().toLowerCase();
+      const password = form.elements.password.value;
+      const password2 = form.elements.password2.value;
+
+      if (password !== password2) {
+        showMessage('Пароли не совпадают.', 'error');
+        form.elements.password2.focus();
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = 'Создаём аккаунт…';
+
+      try {
+        const redirectTo = new URL('index.html', window.location.href).href;
+        const { data, error } = await window.citySupabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: redirectTo,
+            data: { username: name, display_name: name }
+          }
+        });
+
+        if (error) throw error;
+
+        // При включённом подтверждении email Supabase обычно не создаёт сессию
+        // до перехода по ссылке из письма. Это ожидаемое поведение, не ошибка.
+        if (!data.session) {
+          showMessage(
+            'Аккаунт создан. Мы отправили письмо на ' + email +
+            '. Откройте письмо и нажмите ссылку подтверждения, затем вернитесь на сайт и войдите.',
+            'success'
+          );
+          button.textContent = 'Письмо отправлено';
+          button.disabled = true;
+          return;
+        }
+
+        showMessage('Аккаунт создан! Сейчас откроется сайт.', 'success');
+        setTimeout(() => location.href = 'index.html', 900);
+      } catch (err) {
+        showMessage(window.ruError(err, 'Не удалось зарегистрироваться. Попробуйте ещё раз.'), 'error');
+        button.disabled = false;
+        button.textContent = 'Зарегистрироваться';
+      }
+    });
+  </script>
+</body>
+</html>
